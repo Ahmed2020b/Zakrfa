@@ -16,6 +16,9 @@ const client = new Client({
 let zakrfaStyles = new Map();
 let zakrfaSettings = new Map();
 
+// Store whitelist data
+let whitelist = new Map();
+
 // Load saved data
 function loadData() {
     try {
@@ -23,6 +26,7 @@ function loadData() {
             const data = JSON.parse(fs.readFileSync('./zakrfa-data.json', 'utf8'));
             zakrfaStyles = new Map(data.styles || []);
             zakrfaSettings = new Map(data.settings || []);
+            whitelist = new Map(data.whitelist || []);
         }
     } catch (error) {
         console.error('Error loading data:', error);
@@ -34,7 +38,8 @@ function saveData() {
     try {
         const data = {
             styles: Array.from(zakrfaStyles.entries()),
-            settings: Array.from(zakrfaSettings.entries())
+            settings: Array.from(zakrfaSettings.entries()),
+            whitelist: Array.from(whitelist.entries())
         };
         fs.writeFileSync('./zakrfa-data.json', JSON.stringify(data, null, 2));
     } catch (error) {
@@ -78,7 +83,23 @@ const commands = [
         .addStringOption(option =>
             option.setName('emoji')
                 .setDescription('Emoji to use')
-                .setRequired(false))
+                .setRequired(false)),
+    
+    new SlashCommandBuilder()
+        .setName('rent')
+        .setDescription('Add server to whitelist with time')
+        .addStringOption(option =>
+            option.setName('id')
+                .setDescription('Server ID to whitelist')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('time')
+                .setDescription('Time in days (e.g., 30 for 30 days)')
+                .setRequired(true)),
+    
+    new SlashCommandBuilder()
+        .setName('whitelist')
+        .setDescription('Check whitelist status for current server')
 ];
 
 async function registerCommands() {
@@ -137,11 +158,125 @@ async function handleType(interaction) {
     await interaction.reply({ embeds: [embed] });
 }
 
+// Check if server is whitelisted
+function isWhitelisted(guildId) {
+    const whitelistData = whitelist.get(guildId);
+    if (!whitelistData) return false;
+    
+    const now = Date.now();
+    const expiryTime = whitelistData.expiryTime;
+    
+    return now < expiryTime;
+}
+
+// Handle rent command
+async function handleRent(interaction) {
+    const serverId = interaction.options.getString('id');
+    const timeDays = parseInt(interaction.options.getString('time'));
+    
+    if (isNaN(timeDays) || timeDays <= 0) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('خطأ')
+            .setDescription('يجب إدخال عدد صحيح من الأيام')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
+    const expiryTime = Date.now() + (timeDays * 24 * 60 * 60 * 1000); // Convert days to milliseconds
+    
+    whitelist.set(serverId, {
+        addedBy: interaction.user.id,
+        addedAt: Date.now(),
+        expiryTime: expiryTime,
+        timeDays: timeDays
+    });
+    
+    saveData();
+    
+    const expiryDate = new Date(expiryTime);
+    const embed = new EmbedBuilder()
+        .setColor('#00ff00')
+        .setTitle('تم إضافة السيرفر للقائمة البيضاء')
+        .setDescription(`تم إضافة السيرفر \`${serverId}\` للقائمة البيضاء`)
+        .addFields(
+            { name: 'المدة', value: `${timeDays} يوم`, inline: true },
+            { name: 'تاريخ الانتهاء', value: expiryDate.toLocaleDateString('ar-SA'), inline: true },
+            { name: 'تم الإضافة بواسطة', value: `<@${interaction.user.id}>`, inline: true }
+        )
+        .setTimestamp();
+    
+    await interaction.reply({ embeds: [embed] });
+}
+
+// Handle whitelist status command
+async function handleWhitelist(interaction) {
+    const guildId = interaction.guildId;
+    const whitelistData = whitelist.get(guildId);
+    
+    if (!whitelistData) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('حالة القائمة البيضاء')
+            .setDescription('هذا السيرفر غير مسجل في القائمة البيضاء')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
+    const now = Date.now();
+    const isExpired = now >= whitelistData.expiryTime;
+    
+    if (isExpired) {
+        // Remove expired entry
+        whitelist.delete(guildId);
+        saveData();
+        
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('حالة القائمة البيضاء')
+            .setDescription('انتهت صلاحية هذا السيرفر في القائمة البيضاء')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
+    const expiryDate = new Date(whitelistData.expiryTime);
+    const remainingDays = Math.ceil((whitelistData.expiryTime - now) / (24 * 60 * 60 * 1000));
+    
+    const embed = new EmbedBuilder()
+        .setColor('#00ff00')
+        .setTitle('حالة القائمة البيضاء')
+        .setDescription('هذا السيرفر مسجل في القائمة البيضاء')
+        .addFields(
+            { name: 'المدة الأصلية', value: `${whitelistData.timeDays} يوم`, inline: true },
+            { name: 'الأيام المتبقية', value: `${remainingDays} يوم`, inline: true },
+            { name: 'تاريخ الانتهاء', value: expiryDate.toLocaleDateString('ar-SA'), inline: true },
+            { name: 'تم الإضافة بواسطة', value: `<@${whitelistData.addedBy}>`, inline: true },
+            { name: 'تاريخ الإضافة', value: new Date(whitelistData.addedAt).toLocaleDateString('ar-SA'), inline: true }
+        )
+        .setTimestamp();
+    
+    await interaction.reply({ embeds: [embed] });
+}
+
 // Handle create command
 async function handleCreate(interaction) {
     const names = interaction.options.getString('name').split(',').map(n => n.trim());
     const emoji = interaction.options.getString('emoji') || '📁';
     const guildId = interaction.guildId;
+    
+    // Check if server is whitelisted
+    if (!isWhitelisted(guildId)) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('خطأ')
+            .setDescription('هذا السيرفر غير مسموح له باستخدام البوت. يرجى التواصل مع المطور.')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
     
     const style = zakrfaStyles.get(guildId);
     const settings = zakrfaSettings.get(guildId) || {};
@@ -230,6 +365,12 @@ client.on('interactionCreate', async interaction => {
                 break;
             case 'create':
                 await handleCreate(interaction);
+                break;
+            case 'rent':
+                await handleRent(interaction);
+                break;
+            case 'whitelist':
+                await handleWhitelist(interaction);
                 break;
         }
     } catch (error) {
