@@ -166,7 +166,8 @@ async function handleCreate(interaction) {
             // Process the style with variables
             let processedStyle = style
                 .replace(/~/g, emoji)
-                .replace(/%/g, name);
+                .replace(/%/g, name)
+                .replace(/\s/g, space); // Replace spaces with the custom space character
             
             if (type === 'channels') {
                 // Create channel
