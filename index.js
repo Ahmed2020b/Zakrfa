@@ -120,9 +120,32 @@ async function registerCommands() {
 
 // Handle zakrfa command
 async function handleZakrfa(interaction) {
+    const guildId = interaction.guildId;
+    
+    // Check if server is whitelisted
+    if (!isWhitelisted(guildId)) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('خطأ')
+            .setDescription('عفوا يرجى انك تكلم صانع البوت <@1307733573549166713> لكي تستخدمني')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
+    // Check if user has Manage Channels permission
+    if (!interaction.member.permissions.has('ManageChannels')) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('خطأ')
+            .setDescription('يجب أن تملك صلاحية إدارة الرومات لاستخدام هذا الأمر')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
     const style = interaction.options.getString('style');
     const space = interaction.options.getString('space') || ' ';
-    const guildId = interaction.guildId;
     
     // Store the style and settings
     zakrfaStyles.set(guildId, style);
@@ -140,8 +163,31 @@ async function handleZakrfa(interaction) {
 
 // Handle type command
 async function handleType(interaction) {
-    const choice = interaction.options.getString('choice');
     const guildId = interaction.guildId;
+    
+    // Check if server is whitelisted
+    if (!isWhitelisted(guildId)) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('خطأ')
+            .setDescription('عفوا يرجى انك تكلم صانع البوت <@1307733573549166713> لكي تستخدمني')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
+    // Check if user has Manage Channels permission
+    if (!interaction.member.permissions.has('ManageChannels')) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('خطأ')
+            .setDescription('يجب أن تملك صلاحية إدارة الرومات لاستخدام هذا الأمر')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
+    const choice = interaction.options.getString('choice');
     
     // Store the type choice
     const settings = zakrfaSettings.get(guildId) || {};
@@ -171,6 +217,17 @@ function isWhitelisted(guildId) {
 
 // Handle rent command
 async function handleRent(interaction) {
+    // Check if user is the bot owner
+    if (interaction.user.id !== '1307733573549166713') {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('خطأ')
+            .setDescription('فقط صانع البوت يمكنه استخدام هذا الأمر')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
     const serverId = interaction.options.getString('id');
     const timeDays = parseInt(interaction.options.getString('time'));
     
@@ -272,7 +329,18 @@ async function handleCreate(interaction) {
         const embed = new EmbedBuilder()
             .setColor('#ff0000')
             .setTitle('خطأ')
-            .setDescription('هذا السيرفر غير مسموح له باستخدام البوت. يرجى التواصل مع المطور.')
+            .setDescription('عفوا يرجى انك تكلم صانع البوت <@1307733573549166713> لكي تستخدمني')
+            .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed] });
+    }
+    
+    // Check if user has Manage Channels permission
+    if (!interaction.member.permissions.has('ManageChannels')) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('خطأ')
+            .setDescription('يجب أن تملك صلاحية إدارة الرومات لاستخدام هذا الأمر')
             .setTimestamp();
         
         return await interaction.reply({ embeds: [embed] });
