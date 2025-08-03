@@ -252,6 +252,28 @@ async function handleRent(interaction) {
     
     saveData();
     
+    // Send to whitelist storage channel
+    try {
+        const whitelistChannel = client.channels.cache.get('1401554649164808345');
+        if (whitelistChannel) {
+            const whitelistEmbed = new EmbedBuilder()
+                .setColor('#00ff00')
+                .setTitle('🟢 تم إضافة سيرفر للقائمة البيضاء')
+                .setDescription(`**Server ID:** \`${serverId}\``)
+                .addFields(
+                    { name: '📅 المدة', value: `${timeDays} يوم`, inline: true },
+                    { name: '⏰ تاريخ الانتهاء', value: new Date(expiryTime).toLocaleDateString('ar-SA'), inline: true },
+                    { name: '👤 تم الإضافة بواسطة', value: `<@${interaction.user.id}>`, inline: true },
+                    { name: '📊 إجمالي السيرفرات المصرح لها', value: `${whitelist.size} سيرفر`, inline: true }
+                )
+                .setTimestamp();
+            
+            await whitelistChannel.send({ embeds: [whitelistEmbed] });
+        }
+    } catch (error) {
+        console.error('Error sending to whitelist channel:', error);
+    }
+    
     const expiryDate = new Date(expiryTime);
     const embed = new EmbedBuilder()
         .setColor('#00ff00')
@@ -286,9 +308,31 @@ async function handleWhitelist(interaction) {
     const isExpired = now >= whitelistData.expiryTime;
     
     if (isExpired) {
-        // Remove expired entry
+        // Remove expired entry and notify storage channel
         whitelist.delete(guildId);
         saveData();
+        
+        // Send to whitelist storage channel
+        try {
+            const whitelistChannel = client.channels.cache.get('1401554649164808345');
+            if (whitelistChannel) {
+                const expiredEmbed = new EmbedBuilder()
+                    .setColor('#ff0000')
+                    .setTitle('🔴 انتهت صلاحية سيرفر من القائمة البيضاء')
+                    .setDescription(`**Server ID:** \`${guildId}\``)
+                    .addFields(
+                        { name: '⏰ تاريخ الانتهاء', value: new Date(whitelistData.expiryTime).toLocaleDateString('ar-SA'), inline: true },
+                        { name: '📅 المدة الأصلية', value: `${whitelistData.timeDays} يوم`, inline: true },
+                        { name: '👤 تم الإضافة بواسطة', value: `<@${whitelistData.addedBy}>`, inline: true },
+                        { name: '📊 إجمالي السيرفرات المصرح لها', value: `${whitelist.size} سيرفر`, inline: true }
+                    )
+                    .setTimestamp();
+                
+                await whitelistChannel.send({ embeds: [expiredEmbed] });
+            }
+        } catch (error) {
+            console.error('Error sending to whitelist channel:', error);
+        }
         
         const embed = new EmbedBuilder()
             .setColor('#ff0000')
@@ -455,6 +499,41 @@ client.on('ready', async () => {
     console.log(`Logged in as ${client.user.tag}`);
     loadData();
     await registerCommands();
+    
+    // Send whitelist summary to storage channel
+    try {
+        const whitelistChannel = client.channels.cache.get('1401554649164808345');
+        if (whitelistChannel && whitelist.size > 0) {
+            const summaryEmbed = new EmbedBuilder()
+                .setColor('#0099ff')
+                .setTitle('📊 ملخص القائمة البيضاء')
+                .setDescription(`**إجمالي السيرفرات المصرح لها:** ${whitelist.size} سيرفر`)
+                .setTimestamp();
+            
+            // Add active whitelisted servers
+            const activeServers = [];
+            const now = Date.now();
+            
+            for (const [serverId, data] of whitelist.entries()) {
+                if (now < data.expiryTime) {
+                    const remainingDays = Math.ceil((data.expiryTime - now) / (24 * 60 * 60 * 1000));
+                    activeServers.push(`\`${serverId}\` - ${remainingDays} يوم متبقي`);
+                }
+            }
+            
+            if (activeServers.length > 0) {
+                summaryEmbed.addFields({
+                    name: '🟢 السيرفرات النشطة',
+                    value: activeServers.slice(0, 10).join('\n') + (activeServers.length > 10 ? '\n...والمزيد' : ''),
+                    inline: false
+                });
+            }
+            
+            await whitelistChannel.send({ embeds: [summaryEmbed] });
+        }
+    } catch (error) {
+        console.error('Error sending whitelist summary:', error);
+    }
 });
 
 // Error handling
